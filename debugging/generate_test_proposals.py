@@ -16,7 +16,7 @@ def parse_args():
 
 
 def fudge_bboxes(line: pd.Series):
-    bbox_vals = line['bbox']
+    bbox_vals = line['o_bbox']
     shift = uniform(-10, 10)
     bbox_vals = [i + shift for i in bbox_vals]
 
@@ -32,7 +32,7 @@ def main(gt_fp: str):
     root = split(gt_fp)[0]
 
     # First make perfect proposals
-    bboxes = gt.ann_info[['bbox', 'cat_id', 'img_id']]
+    bboxes = gt.ann_info[['o_bbox', 'cat_id', 'img_id']]
     proposals = {'proposals': bboxes.to_dict('records')}
     with open(join(root, 'proposals_perfect.json'), 'w') as prop_file:
         json.dump(proposals, prop_file)
@@ -41,7 +41,7 @@ def main(gt_fp: str):
     selector = [True if random() > 0.2 else False
                 for _ in range(len(gt.ann_info))]
 
-    bboxes = gt.ann_info[['bbox', 'cat_id', 'img_id']][selector].apply(
+    bboxes = gt.ann_info[['o_bbox', 'cat_id', 'img_id']][selector].apply(
         fudge_bboxes, 1, result_type='expand'
     )
 

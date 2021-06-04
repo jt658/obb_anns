@@ -389,7 +389,7 @@ class OBBAnns:
         :returns A dictionary of calculated metric values.
         :rtype: dict
         """
-
+        #print("TESTING")
         def calculate_tpfp(detection, img_gt):
             """Calculates whether a detection is a true or false positive.
 
@@ -402,8 +402,11 @@ class OBBAnns:
             :rtype: dict
             """
             def calculate_oriented_overlap(row):
+                #print(row)
+                #print("GT ROW: ", row['gt'])
+                #print("DET ROW: ", row['det'].tolist())
                 return iou_poly(VectorDouble(row['gt']),
-                                VectorDouble(row['det']))
+                                VectorDouble(row['det'].tolist()))
 
             def calculate_aligned_overlap(row):
                 a = row['gt']
@@ -421,13 +424,27 @@ class OBBAnns:
 
             # expect to only have one annotation set at this point
             gt_cat_id = img_gt['cat_id'].map(lambda x: x[0])
-            same_cat_gt = img_gt[gt_cat_id == detection['cat_id']]
+            #print("gt_cat_id", gt_cat_id, type(gt_cat_id))
+            #print("")
+            #print("detection cat id", detection['cat_id'], type(detection['cat_id']))
+            #print("")
+            #print(gt_cat_id == detection['cat_id'])
+            #print("")
+            same_cat_gt = img_gt[gt_cat_id == int(detection['cat_id'])]
+            #print("same_cat_gt", same_cat_gt)
+            #print("Length of same_cat_gt", len(same_cat_gt))
             if len(same_cat_gt) > 0:
                 if self.props_oriented:
+                    #print("In oriented case")
+                    #print(same_cat_gt['o_bbox'])
+                    #print("Length same_cat_gt: ", len(same_cat_gt))
+                    #print("Coords of detected bbox: ", detection['bbox'])
                     df = pd.DataFrame({
                         'gt': same_cat_gt['o_bbox'],
-                        'det': [detection['bbox'] * len(same_cat_gt)]
+                        'det': [detection['bbox']] * len(same_cat_gt)
                     })
+                    #print("GT: ", type(df['gt'][1][0]))
+                    #print("DET: ", type(df['det'][1].tolist()[0]))
                     overlaps = df.apply(calculate_oriented_overlap, 1)
                 else:
                     df = pd.DataFrame({
@@ -468,6 +485,7 @@ class OBBAnns:
             for det_idx, det in img_props.iterrows():
                 tpfp = calculate_tpfp(det, img_gt)
                 val, overlap = tpfp['bbox_id'], tpfp['overlap']
+                #print("Val and Overlap: ", val, overlap)
                 overlaps.append([val, overlap, det['cat_id'],
                                  float(det['score'])])
                 if val != -1:
@@ -489,7 +507,7 @@ class OBBAnns:
                 overlaps,
                 tot_props,
                 iou_thrs)
-
+        #print(results_dict)
         if average_thrs:
             for cls_key, tresh_dict in results_dict.items():
                 averaged_dict = {'accuracy': 0,
@@ -510,12 +528,20 @@ class OBBAnns:
             
             # sort overlaps by score:
             overlaps = overlaps[overlaps[:, 3].argsort()[::-1]]
-
-            tp = overlaps[:, 1] >= iou_thr
-            fp = overlaps[:, 1] < iou_thr
+            
+            #print("Overlap: ", overlaps[:,1])
+            #print("Thresh: ", iou_thr)
+            tp = float(overlaps[:, 1][0]) >= iou_thr
+            fp = float(overlaps[:, 1][0]) < iou_thr
+            
+            #print("TP: ", tp)
+            #print("FP: ", fp)
 
             tp_sum = np.cumsum(tp).astype(dtype=np.float)
             fp_sum = np.cumsum(fp).astype(dtype=np.float)
+            
+            print("OVERLAPS: ", overlaps)
+            print("TP SUM: ", tp_sum)
 
             # Count number of ground truths without a corresponding detection
             # (False Negative)
@@ -528,18 +554,18 @@ class OBBAnns:
                 ann_gt_idxs = set(self.ann_info.index)
 
             nr_gt = len(ann_gt_idxs)
-
+            #print("False Negative: ", nr_gt)
             if nr_gt > 0:
-                recall = tp_sum / nr_gt
+                recall = tp_sum / (tp_sum + nr_gt)
             else:
-                recall = tp_sum * 0
+                recall = tp_sum / (tp_sum + np.spacing(1))
             precision = tp_sum / (fp_sum + tp_sum + np.spacing(1))
 
             # pad vectors for computation
             average_precision = self._average_precision(recalls=recall,
                                                         precisions=precision)
             
-            metrics[iou_thr] = {'ap': average_precision,
+            metrics[iou_thr] = {'accuracy': average_precision,
                                 'precision': np.average(precision),
                                 'recall': np.average(recall)}
         return metrics
